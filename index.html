@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wholesale Sales Desk</title>
+<style>
+:root{--ink:#1c1c1a;--muted:#6b6a64;--bg:#faf8f3;--card:#fff;--line:#e6e1d6;--brand:#24452f;--hot:#b4412b;--warn:#a8670f;--good:#2f6b3f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+header{max-width:1100px;margin:0 auto;padding:20px 16px 6px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+h1{margin:0;font-size:24px;color:var(--brand);letter-spacing:-.3px}
+.sub{color:var(--muted);margin:2px 0 0;font-size:13px}
+.spacer{flex:1}
+.btn{border:1px solid var(--brand);background:#fff;color:var(--brand);border-radius:8px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--brand);color:#fff}
+.btn:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #9cc2a7;outline-offset:2px}
+label.file{display:inline-block}
+label.file input{position:absolute;opacity:0;width:1px;height:1px}
+nav{max-width:1100px;margin:0 auto;padding:6px 16px;display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+nav button{border:0;background:none;padding:10px 12px;font:inherit;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+nav button[aria-selected=true]{color:var(--brand);border-color:var(--brand)}
+main{max-width:1100px;margin:0 auto;padding:14px 16px 60px}
+.notice{background:#fff7e6;border:1px solid #f0d9a8;border-radius:8px;padding:10px 12px;margin:10px 0;font-size:14px}
+.notice.bad{background:#fdecea;border-color:#f3c1b8}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:36px 16px;text-align:center;color:var(--muted);background:#fff}
+.drop.over{border-color:var(--brand);background:#f1f6f2}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:6px 0 14px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.tile b{display:block;font-size:22px}
+.tile span{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.card .top{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline}
+.card .name{font-weight:700;font-size:16px}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700}
+.s-Overdue{background:#fbe3dd;color:var(--hot)}.s-Due-now{background:#fdf0d8;color:var(--warn)}.s-Lapsed{background:#ece9e2;color:#57554e}.s-New{background:#e3eef9;color:#245a8a}.s-On-track{background:#e2f0e5;color:var(--good)}
+.meta{color:var(--muted);font-size:13px}
+.usual{margin:6px 0 0;font-size:14px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:#f6f3ec;cursor:pointer;white-space:nowrap}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+h2{font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 0 8px}
+.bar{height:8px;background:#ece9e2;border-radius:4px;overflow:hidden;min-width:60px}
+.bar i{display:block;height:100%;background:var(--brand)}
+.foot{color:var(--muted);font-size:12px;margin-top:24px}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:8px;font-size:14px}
+input[type=date]{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit;background:#fff}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Wholesale Sales Desk</h1><p class="sub" id="source">Drop in your orders and see who to call.</p></div>
+  <div class="spacer"></div>
+  <label class="sub" for="asof">As of <input type="date" id="asof"></label>
+  <label class="file btn primary">Open orders CSV<input type="file" id="file" accept=".csv,text/csv"></label>
+  <button class="btn" id="sample" type="button">Try sample data</button>
+</header>
+<nav role="tablist" aria-label="Views">
+  <button role="tab" data-tab="today" aria-selected="true">Who to call</button>
+  <button role="tab" data-tab="accounts" aria-selected="false">Accounts</button>
+  <button role="tab" data-tab="products" aria-selected="false">What they reorder</button>
+</nav>
+<main id="main"></main>
+<script src="core.js"></script>
+<script src="sample.js"></script>
+<script>
+(function () {
+  "use strict";
+  const D = window.SalesDesk;
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const usd = n => "$" + Math.round(n).toLocaleString("en-US");
+  const todayISO = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  const state = { tab: "today", data: null, sourceName: "", asOf: todayISO(), sortA: { key: "status", dir: 1 } };
+
+  function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2200); }
+  function load(text, name, asOf) {
+    const r = D.loadOrders(text);
+    state.data = r; state.sourceName = name;
+    if (asOf) { state.asOf = asOf; $("#asof").value = asOf; }
+    $("#source").textContent = r.lines.length ? `${name}: ${r.lines.length.toLocaleString()} order lines. Nothing leaves your computer.` : "Drop in your orders and see who to call.";
+    render();
+  }
+  $("#asof").value = state.asOf;
+  $("#asof").addEventListener("change", e => { if (e.target.value) { state.asOf = e.target.value; render(); } });
+  $("#file").addEventListener("change", e => { const f = e.target.files[0]; if (f) f.text().then(t => load(t, f.name, todayISO())); e.target.value = ""; });
+  $("#sample").addEventListener("click", () => load(window.SAMPLE_CSV, "Sample data (made-up stores)", "2026-11-02"));
+  document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
+    state.tab = b.dataset.tab;
+    document.querySelectorAll("nav button").forEach(x => x.setAttribute("aria-selected", x === b ? "true" : "false"));
+    render();
+  }));
+
+  function empty() {
+    const m = $("#main");
+    m.innerHTML = `<div class="drop" id="drop"><p style="font-size:17px;color:var(--ink);margin:0 0 6px"><b>Drop your orders CSV here</b></p>
+      <p style="margin:0 0 12px">One row per product on an order, or one row per order. Needs a date, an account and a total.<br>Your file stays on this computer. Nothing is uploaded.</p>
+      <button class="btn" type="button" id="sample2">Or try it with sample data</button></div>
+      <p class="foot">Columns it looks for: <b>order_date</b>, <b>account</b>, <b>line_total</b> (required), plus <b>product</b>, <b>quantity</b>, <b>order_id</b> if you have them. Common names like "customer", "date" and "total" work too.</p>`;
+    $("#sample2").addEventListener("click", () => $("#sample").click());
+    const d = $("#drop");
+    d.addEventListener("dragover", e => { e.preventDefault(); d.classList.add("over"); });
+    d.addEventListener("dragleave", () => d.classList.remove("over"));
+    d.addEventListener("drop", e => { e.preventDefault(); d.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) f.text().then(t => load(t, f.name, todayISO())); });
+  }
+
+  function render() {
+    const m = $("#main");
+    if (!state.data || !state.data.lines.length) {
+      empty();
+      if (state.data && state.data.problems.length) m.insertAdjacentHTML("afterbegin", `<div class="notice bad">${state.data.problems.map(esc).join("<br>")}</div>`);
+      return;
+    }
+    const accounts = D.scoreAll(state.data.lines, state.asOf);
+    const warn = state.data.problems.length ? `<div class="notice">${state.data.problems.map(esc).join("<br>")}</div>` : "";
+    m.innerHTML = warn + (state.tab === "today" ? today(accounts) : state.tab === "accounts" ? accountsView(accounts) : products());
+    m.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => {
+      const a = accounts.find(x => x.account === b.dataset.copy);
+      const items = a.usualOrder.map(u => `${u.quantity} ${u.product}`).join(", ");
+      const msg = `Hey, it's been a few weeks since your last order so I wanted to check in. ${items ? "Want me to put together your usual? " + items + "." : "Want me to send over what we have right now?"}`;
+      navigator.clipboard.writeText(msg).then(() => toast("Message copied"), () => toast("Couldn't copy here"));
+    }));
+    m.querySelectorAll("th[data-sort]").forEach(th => th.addEventListener("click", () => {
+      const k = th.dataset.sort; state.sortA = { key: k, dir: state.sortA.key === k ? -state.sortA.dir : (k === "account" || k === "status" ? 1 : -1) }; render();
+    }));
+  }
+
+  const pill = s => `<span class="pill s-${s.replace(/ /g, "-")}">${s}</span>`;
+  function card(a) {
+    const late = a.daysLate != null && a.daysLate > 0 ? `${a.daysLate} days late` : a.status === "New" ? "first order" : "";
+    return `<div class="card"><div class="top"><span class="name">${esc(a.account)}</span>${pill(a.status)}
+      <span class="meta">${late ? late + " · " : ""}last order ${a.lastOrder} (${a.daysSince} days ago)${a.usualGap ? ` · usually every ${a.usualGap} days` : ""} · avg order ${usd(a.avgOrder)}</span>
+      <span class="spacer"></span><button class="btn" type="button" data-copy="${esc(a.account)}">Copy check-in text</button></div>
+      ${a.usualOrder.length ? `<p class="usual"><span class="meta">Usually gets:</span> ${a.usualOrder.map(u => `${u.quantity} ${esc(u.product)}`).join(" · ")}</p>` : ""}</div>`;
+  }
+  function today(accounts) {
+    const by = s => accounts.filter(a => a.status === s);
+    const atRisk = [...by("Overdue"), ...by("Due now")].reduce((t, a) => t + a.avgOrder, 0);
+    const tiles = `<div class="tiles">
+      <div class="tile"><span>Overdue</span><b>${by("Overdue").length}</b></div>
+      <div class="tile"><span>Due now</span><b>${by("Due now").length}</b></div>
+      <div class="tile"><span>Lapsed</span><b>${by("Lapsed").length}</b></div>
+      <div class="tile"><span>Waiting to reorder</span><b>${usd(atRisk)}</b><small class="meta">one usual order from each late store</small></div></div>`;
+    const sec = (title, list, note) => list.length ? `<h2>${title}</h2>${note ? `<p class="meta" style="margin:-4px 0 8px">${note}</p>` : ""}${list.map(card).join("")}` : "";
+    const call = [...by("Overdue"), ...by("Due now")];
+    return tiles + (call.length ? "" : `<div class="notice">Nobody is late right now.</div>`)
+      + sec("Call first", call, "Overdue, then due now. Biggest accounts first inside each.")
+      + sec("Win back", by("Lapsed"), "No order in 120+ days (or 3x their usual gap). Different call: find out what changed.")
+      + sec("New accounts", by("New"), "Only one order so far. A quick check-in decides if there's a second.")
+      + `<p class="foot">Overdue = more than 7 days past their usual gap. Due now = 0 to 7 days past. Lapsed = 120+ days, or 3x their usual gap, whichever is longer. Usual gap = the middle gap between their orders.</p>`;
+  }
+  function accountsView(accounts) {
+    const k = state.sortA.key, dir = state.sortA.dir;
+    const val = a => k === "status" ? D.STATUS_ORDER.indexOf(a.status) : a[k] == null ? -Infinity : a[k];
+    const rows = [...accounts].sort((a, b) => { const x = val(a), y = val(b); return (typeof x === "string" ? x.localeCompare(y) : x - y) * dir; });
+    const th = (key, label, num) => `<th data-sort="${key}" class="${num ? "num" : ""}" aria-sort="${k === key ? (dir > 0 ? "ascending" : "descending") : "none"}">${label}${k === key ? (dir > 0 ? " ▲" : " ▼") : ""}</th>`;
+    return `<div class="scroll"><table><thead><tr>${th("account", "Account")}${th("status", "Status")}${th("lastOrder", "Last order")}${th("usualGap", "Usual gap", 1)}${th("orders", "Orders", 1)}${th("avgOrder", "Avg order", 1)}${th("last90", "Last 90 days", 1)}${th("trend", "vs prior 90", 1)}${th("lifetime", "Lifetime", 1)}</tr></thead><tbody>
+      ${rows.map(a => `<tr><td>${esc(a.account)}</td><td>${pill(a.status)}</td><td>${a.lastOrder}</td><td class="num">${a.usualGap ?? "–"}</td><td class="num">${a.orders}</td><td class="num">${usd(a.avgOrder)}</td><td class="num">${usd(a.last90)}</td><td class="num">${a.trend == null ? "–" : (a.trend > 0 ? "+" : "") + a.trend + "%"}</td><td class="num">${usd(a.lifetime)}</td></tr>`).join("")}
+      </tbody></table></div><p class="foot">Click a column to sort. ${accounts.length} accounts.</p>`;
+  }
+  function products() {
+    if (!state.data.hasProducts) return `<div class="notice">This file has no product column, so there's nothing to show here. Export one row per product on each order (with a <b>product</b> column) to see what stores come back for.</div>`;
+    const list = D.productReorders(state.data.lines, state.asOf);
+    return `<p class="meta">Reorder rate = share of stores that bought it more than once. High means it sells through. Low after a few tries usually means it sat on the shelf.</p>
+      <div class="scroll"><table><thead><tr><th>Product</th><th>Reorder rate</th><th class="num">Stores that reordered</th><th class="num">Units, last 90 days</th><th class="num">Revenue, all time</th><th>Last sold</th></tr></thead><tbody>
+      ${list.map(p => `<tr><td>${esc(p.product)}</td><td><div style="display:flex;gap:8px;align-items:center"><div class="bar" style="width:90px"><i style="width:${p.reorderRate}%"></i></div>${p.reorderRate}%</div></td><td class="num">${p.repeatBuyers} of ${p.buyers}</td><td class="num">${Math.round(p.qty90).toLocaleString()}</td><td class="num">${usd(p.revenue)}</td><td>${p.lastSold}</td></tr>`).join("")}
+      </tbody></table></div>`;
+  }
+  render();
+})();
+</script>
+</body>
+</html>
