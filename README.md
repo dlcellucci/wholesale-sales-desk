@@ -32,6 +32,8 @@ Late accounts are listed biggest first, with what they usually order and a one-t
 
 **What they reorder.** For each product, how many stores bought it more than once. High means it sells through. A product nobody reorders usually sat on the shelf.
 
+> Closed stores on my call list waste my time, and they make it look like revenue I can get back. It isn't. That money is now for legal or our CFO to chase. My call list should only have active accounts, so I can keep a steady rhythm and relationship with the stores that actually bring in revenue. — Dan
+
 **Mark closed.** Store closed, or just not a fit? Tap "Mark closed" and it drops out of the call list and the totals. Bring it back anytime from the bottom of the list. Saved in your browser only.
 
 **Case size.** If you sell in cases, type the case size at the top (say 12). "Usually gets 23" becomes 24. It never rounds a real order down to zero. Leave it blank to turn it off.
