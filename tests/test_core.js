@@ -42,4 +42,7 @@ t("sample.js matches the CSV", () => {
   const win = {}; new Function("window", fs.readFileSync(path.join(__dirname, "..", "sample.js"), "utf8"))(win);
   assert.equal(win.SAMPLE_CSV, fs.readFileSync(path.join(__dirname, "..", "data", "sample_orders.csv"), "utf8"));
 });
+t("case size: rounds to nearest case", () => { assert.equal(D.roundToPack(23, 12), 24); assert.equal(D.roundToPack(17, 12), 12); assert.equal(D.roundToPack(18, 12), 24); });
+t("case size: never rounds a real order down to zero", () => assert.equal(D.roundToPack(3, 12), 12));
+t("case size: blank, 1 or junk leaves it alone", () => { assert.equal(D.roundToPack(23, ""), 23); assert.equal(D.roundToPack(23, 1), 23); assert.equal(D.roundToPack(23, "abc"), 23); });
 console.log(`\n${passed} tests passed`);

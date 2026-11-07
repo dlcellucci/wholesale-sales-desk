@@ -177,6 +177,13 @@
     }).sort((a, b) => b.reorderRate - a.reorderRate || b.repeatBuyers - a.repeatBuyers || b.revenue - a.revenue);
   }
 
-  const api = { parseCSV, loadOrders, groupOrders, scoreAccount, scoreAll, productReorders, STATUS_ORDER, GRACE_DAYS, LAPSED_MIN_DAYS, LAPSED_MULTIPLE };
+  // Round a usual quantity to whole cases/packs. pack blank or 1 = leave it alone. Never rounds down to zero.
+  function roundToPack(qty, pack) {
+    const p = Math.floor(Number(pack));
+    if (!(p > 1) || !(qty > 0)) return qty;
+    return Math.max(p, Math.round(qty / p) * p);
+  }
+
+  const api = { parseCSV, roundToPack, loadOrders, groupOrders, scoreAccount, scoreAll, productReorders, STATUS_ORDER, GRACE_DAYS, LAPSED_MIN_DAYS, LAPSED_MULTIPLE };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.SalesDesk = api;
 })(typeof window !== "undefined" ? window : globalThis);

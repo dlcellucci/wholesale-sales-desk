@@ -46,6 +46,8 @@ h2{font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 .bar i{display:block;height:100%;background:var(--brand)}
 .foot{color:var(--muted);font-size:12px;margin-top:24px}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#222;color:#fff;padding:8px 14px;border-radius:8px;font-size:14px}
+.btn.small{padding:4px 10px;font-size:13px;font-weight:600}
+.closed-row td{color:var(--muted)}
 input[type=date]{border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit;background:#fff}
 </style>
 </head>
@@ -54,6 +56,7 @@ input[type=date]{border:1px solid var(--line);border-radius:6px;padding:6px 8px;
   <div><h1>Wholesale Sales Desk</h1><p class="sub" id="source">Drop in your orders and see who to call.</p></div>
   <div class="spacer"></div>
   <label class="sub" for="asof">As of <input type="date" id="asof"></label>
+  <label class="sub" for="pack" title="Rounds 'usually gets' to whole cases. Leave blank to turn it off.">Case size <input type="number" id="pack" min="2" step="1" placeholder="off" style="width:64px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit;background:#fff"></label>
   <label class="file btn primary">Open orders CSV<input type="file" id="file" accept=".csv,text/csv"></label>
   <button class="btn" id="sample" type="button">Try sample data</button>
 </header>
@@ -73,7 +76,16 @@ input[type=date]{border:1px solid var(--line);border-radius:6px;padding:6px 8px;
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const usd = n => "$" + Math.round(n).toLocaleString("en-US");
   const todayISO = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
-  const state = { tab: "today", data: null, sourceName: "", asOf: todayISO(), sortA: { key: "status", dir: 1 } };
+  const state = { tab: "today", data: null, sourceName: "", asOf: todayISO(), sortA: { key: "status", dir: 1 }, showClosed: false };
+  // Closed accounts and case size are saved in this browser only. Nothing is uploaded.
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("wsd-" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("wsd-" + k, JSON.stringify(v)); } catch {} }
+  };
+  let closed = new Set(store.get("closed", []));
+  let pack = store.get("pack", "");
+  const saveClosed = () => store.set("closed", [...closed]);
+  const qtyOf = u => D.roundToPack(u.quantity, pack);
 
   function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2200); }
   function load(text, name, asOf) {
@@ -84,6 +96,8 @@ input[type=date]{border:1px solid var(--line);border-radius:6px;padding:6px 8px;
     render();
   }
   $("#asof").value = state.asOf;
+  $("#pack").value = pack;
+  $("#pack").addEventListener("change", e => { const v = Math.floor(Number(e.target.value)); pack = v > 1 ? v : ""; e.target.value = pack; store.set("pack", pack); render(); });
   $("#asof").addEventListener("change", e => { if (e.target.value) { state.asOf = e.target.value; render(); } });
   $("#file").addEventListener("change", e => { const f = e.target.files[0]; if (f) f.text().then(t => load(t, f.name, todayISO())); e.target.value = ""; });
   $("#sample").addEventListener("click", () => load(window.SAMPLE_CSV, "Sample data (made-up stores)", "2026-11-02"));
@@ -113,12 +127,20 @@ input[type=date]{border:1px solid var(--line);border-radius:6px;padding:6px 8px;
       if (state.data && state.data.problems.length) m.insertAdjacentHTML("afterbegin", `<div class="notice bad">${state.data.problems.map(esc).join("<br>")}</div>`);
       return;
     }
-    const accounts = D.scoreAll(state.data.lines, state.asOf);
+    const all = D.scoreAll(state.data.lines, state.asOf);
+    const accounts = all.filter(a => !closed.has(a.account));
+    const closedList = all.filter(a => closed.has(a.account));
     const warn = state.data.problems.length ? `<div class="notice">${state.data.problems.map(esc).join("<br>")}</div>` : "";
-    m.innerHTML = warn + (state.tab === "today" ? today(accounts) : state.tab === "accounts" ? accountsView(accounts) : products());
+    m.innerHTML = warn + (state.tab === "today" ? today(accounts, closedList) : state.tab === "accounts" ? accountsView(accounts, closedList) : products());
+    m.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => {
+      const n = b.dataset.close;
+      if (closed.has(n)) { closed.delete(n); toast(n + " is back on the list"); } else { closed.add(n); toast(n + " marked closed"); }
+      saveClosed(); render();
+    }));
+    m.querySelectorAll("[data-showclosed]").forEach(b => b.addEventListener("click", () => { state.showClosed = !state.showClosed; render(); }));
     m.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => {
-      const a = accounts.find(x => x.account === b.dataset.copy);
-      const items = a.usualOrder.map(u => `${u.quantity} ${u.product}`).join(", ");
+      const a = all.find(x => x.account === b.dataset.copy);
+      const items = a.usualOrder.map(u => `${qtyOf(u)} ${u.product}`).join(", ");
       const msg = `Hey, it's been a few weeks since your last order so I wanted to check in. ${items ? "Want me to put together your usual? " + items + "." : "Want me to send over what we have right now?"}`;
       navigator.clipboard.writeText(msg).then(() => toast("Message copied"), () => toast("Couldn't copy here"));
     }));
@@ -132,10 +154,17 @@ input[type=date]{border:1px solid var(--line);border-radius:6px;padding:6px 8px;
     const late = a.daysLate != null && a.daysLate > 0 ? `${a.daysLate} days late` : a.status === "New" ? "first order" : "";
     return `<div class="card"><div class="top"><span class="name">${esc(a.account)}</span>${pill(a.status)}
       <span class="meta">${late ? late + " · " : ""}last order ${a.lastOrder} (${a.daysSince} days ago)${a.usualGap ? ` · usually every ${a.usualGap} days` : ""} · avg order ${usd(a.avgOrder)}</span>
-      <span class="spacer"></span><button class="btn" type="button" data-copy="${esc(a.account)}">Copy check-in text</button></div>
-      ${a.usualOrder.length ? `<p class="usual"><span class="meta">Usually gets:</span> ${a.usualOrder.map(u => `${u.quantity} ${esc(u.product)}`).join(" · ")}</p>` : ""}</div>`;
+      <span class="spacer"></span><button class="btn" type="button" data-copy="${esc(a.account)}">Copy check-in text</button>
+      <button class="btn small" type="button" data-close="${esc(a.account)}" title="Hide this account. You can bring it back from the bottom of the list.">Mark closed</button></div>
+      ${a.usualOrder.length ? `<p class="usual"><span class="meta">Usually gets${pack ? ` (cases of ${pack})` : ""}:</span> ${a.usualOrder.map(u => `${qtyOf(u)} ${esc(u.product)}`).join(" · ")}</p>` : ""}</div>`;
   }
-  function today(accounts) {
+  function closedBlock(closedList) {
+    if (!closedList.length) return "";
+    return `<h2>Closed or not a fit (${closedList.length})</h2><p class="meta" style="margin:-4px 0 8px">Hidden from the lists and totals above. Saved in this browser only.
+      <button class="btn small" type="button" data-showclosed>${state.showClosed ? "Hide them" : "Show them"}</button></p>
+      ${state.showClosed ? closedList.map(a => `<div class="card"><div class="top"><span class="name" style="color:var(--muted)">${esc(a.account)}</span><span class="meta">last order ${a.lastOrder}</span><span class="spacer"></span><button class="btn small" type="button" data-close="${esc(a.account)}">Bring back</button></div></div>`).join("") : ""}`;
+  }
+  function today(accounts, closedList) {
     const by = s => accounts.filter(a => a.status === s);
     const atRisk = [...by("Overdue"), ...by("Due now")].reduce((t, a) => t + a.avgOrder, 0);
     const tiles = `<div class="tiles">
@@ -149,16 +178,17 @@ input[type=date]{border:1px solid var(--line);border-radius:6px;padding:6px 8px;
       + sec("Call first", call, "Overdue, then due now. Biggest accounts first inside each.")
       + sec("Win back", by("Lapsed"), "No order in 120+ days (or 3x their usual gap). Different call: find out what changed.")
       + sec("New accounts", by("New"), "Only one order so far. A quick check-in decides if there's a second.")
+      + closedBlock(closedList)
       + `<p class="foot">Overdue = more than 7 days past their usual gap. Due now = 0 to 7 days past. Lapsed = 120+ days, or 3x their usual gap, whichever is longer. Usual gap = the middle gap between their orders.</p>`;
   }
-  function accountsView(accounts) {
+  function accountsView(accounts, closedList) {
     const k = state.sortA.key, dir = state.sortA.dir;
     const val = a => k === "status" ? D.STATUS_ORDER.indexOf(a.status) : a[k] == null ? -Infinity : a[k];
     const rows = [...accounts].sort((a, b) => { const x = val(a), y = val(b); return (typeof x === "string" ? x.localeCompare(y) : x - y) * dir; });
     const th = (key, label, num) => `<th data-sort="${key}" class="${num ? "num" : ""}" aria-sort="${k === key ? (dir > 0 ? "ascending" : "descending") : "none"}">${label}${k === key ? (dir > 0 ? " ▲" : " ▼") : ""}</th>`;
-    return `<div class="scroll"><table><thead><tr>${th("account", "Account")}${th("status", "Status")}${th("lastOrder", "Last order")}${th("usualGap", "Usual gap", 1)}${th("orders", "Orders", 1)}${th("avgOrder", "Avg order", 1)}${th("last90", "Last 90 days", 1)}${th("trend", "vs prior 90", 1)}${th("lifetime", "Lifetime", 1)}</tr></thead><tbody>
-      ${rows.map(a => `<tr><td>${esc(a.account)}</td><td>${pill(a.status)}</td><td>${a.lastOrder}</td><td class="num">${a.usualGap ?? "–"}</td><td class="num">${a.orders}</td><td class="num">${usd(a.avgOrder)}</td><td class="num">${usd(a.last90)}</td><td class="num">${a.trend == null ? "–" : (a.trend > 0 ? "+" : "") + a.trend + "%"}</td><td class="num">${usd(a.lifetime)}</td></tr>`).join("")}
-      </tbody></table></div><p class="foot">Click a column to sort. ${accounts.length} accounts.</p>`;
+    return `<div class="scroll"><table><thead><tr>${th("account", "Account")}${th("status", "Status")}${th("lastOrder", "Last order")}${th("usualGap", "Usual gap", 1)}${th("orders", "Orders", 1)}${th("avgOrder", "Avg order", 1)}${th("last90", "Last 90 days", 1)}${th("trend", "vs prior 90", 1)}${th("lifetime", "Lifetime", 1)}<th></th></tr></thead><tbody>
+      ${rows.map(a => `<tr><td>${esc(a.account)}</td><td>${pill(a.status)}</td><td>${a.lastOrder}</td><td class="num">${a.usualGap ?? "–"}</td><td class="num">${a.orders}</td><td class="num">${usd(a.avgOrder)}</td><td class="num">${usd(a.last90)}</td><td class="num">${a.trend == null ? "–" : (a.trend > 0 ? "+" : "") + a.trend + "%"}</td><td class="num">${usd(a.lifetime)}</td><td><button class="btn small" type="button" data-close="${esc(a.account)}">Mark closed</button></td></tr>`).join("")}
+      </tbody></table></div>${closedBlock(closedList)}<p class="foot">Click a column to sort. ${accounts.length} accounts${closedList.length ? `, plus ${closedList.length} marked closed` : ""}.</p>`;
   }
   function products() {
     if (!state.data.hasProducts) return `<div class="notice">This file has no product column, so there's nothing to show here. Export one row per product on each order (with a <b>product</b> column) to see what stores come back for.</div>`;
